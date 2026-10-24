@@ -1,0 +1,65 @@
+"""
+EXPERIMENT 8: RNN with LSTM
+=========================================
+Objectives:
+    - Understand LSTM architecture and gates
+    - Implement LSTM for sequence prediction
+    - Compare with simple RNN
+    - Handle longer sequences
+
+Dataset:
+    Synthetic stock price data (trend + noise)
+
+LSTM Architecture:
+    Input (60 timesteps, 1 feature)
+        -> LSTM (100, return_sequences=True) + Dropout (0.2)
+        -> LSTM (50) + Dropout (0.2)
+        -> Dense (25, ReLU)
+        -> Dense (1) - Output
+
+Expected Outcomes:
+    - LSTM RMSE: ~0.05 (better than RNN)
+    - LSTM handles long sequences better
+    - LSTM training more stable
+    - Clear advantage demonstrated
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from keras.models import Sequential
+from keras.layers import LSTM, SimpleRNN, Dense, Dropout
+from keras.optimizers import Adam
+from sklearn.preprocessing import MinMaxScaler
+
+
+# Generate more complex time series
+def generate_stock_prices(num_samples=500, seq_length=60):
+    """Generate synthetic stock price data with trend and noise"""
+    prices = []
+    sequences = []
+
+    # Generate price with trend
+    base_price = 100
+    trend = np.random.normal(0.001, 0.01, num_samples + seq_length)
+    price_series = base_price * np.exp(np.cumsum(trend))
+
+    for i in range(num_samples):
+        sequences.append(price_series[i:i + seq_length])
+        prices.append(price_series[i + seq_length])
+
+    return np.array(sequences), np.array(prices)
+
+
+# Generate data
+X, y = generate_stock_prices(num_samples=500, seq_length=60)
+
+# Normalize
+scaler = MinMaxScaler()
+X_normalized = np.zeros_like(X)
+for i in range(len(X)):
+    X_normalized[i] = scaler.fit_transform(X[i].reshape(-1, 1)).flatten()
+
+y_normalized = scaler.fit_transform(y.reshape(-1, 1)).flatten()
+
+# Split data
+split_idx
