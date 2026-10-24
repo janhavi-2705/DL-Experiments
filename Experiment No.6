@@ -1,0 +1,160 @@
+"""
+EXPERIMENT 6: Transfer Learning in CNN
+=========================================
+Objectives:
+    - Understand transfer learning concept
+    - Use pre-trained models (VGG16, ResNet, MobileNet)
+    - Fine-tune for custom dataset
+    - Compare transfer vs training from scratch
+
+Dataset:
+    CIFAR-10 or custom image dataset
+
+Key Concepts:
+    - Feature Extraction: Using pre-trained weights as fixed features
+    - Fine-tuning: Unfreezing top layers for domain-specific learning
+    - Layer Freezing: Controlling which layers to update during training
+
+Expected Outcomes:
+    - Transfer learning accuracy: ~80-85%
+    - From scratch accuracy: ~60-70%
+    - Transfer learning converges faster
+    - Understanding of when to use transfer learning
+
+NOTE: The "from scratch" model was cut off in the source notes, so it is
+completed here with a standard CNN of similar depth.
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from tensorflow.image import resize
+from keras.models import Model, Sequential
+from keras.layers import Dense, GlobalAveragePooling2D, Conv2D, MaxPooling2D, Flatten, Dropout
+from keras.optimizers import Adam
+from keras.applications import VGG16, ResNet50, MobileNetV2
+from keras.applications.vgg16 import preprocess_input
+from keras.datasets import cifar10
+from keras.utils import to_categorical
+from sklearn.model_selection import train_test_split
+
+# Subset sizes (the full dataset needs ~36 GB RAM at 224x224)
+# Increase these if your laptop has enough memory, or set to None for all data
+TRAIN_SAMPLES = 5000
+TEST_SAMPLES = 1000
+
+# Load CIFAR-10
+(X_train, y_train), (X_test, y_test) = cifar10.load_data()
+
+if TRAIN_SAMPLES:
+    X_train, y_train = X_train[:TRAIN_SAMPLES], y_train[:TRAIN_SAMPLES]
+if TEST_SAMPLES:
+    X_test, y_test = X_test[:TEST_SAMPLES], y_test[:TEST_SAMPLES]
+
+y_train = to_categorical(y_train, 10)
+y_test = to_categorical(y_test, 10)
+
+# Resize for VGG16 (requires 224x224)
+X_train_resized = resize(X_train, (224, 224)).numpy()
+X_test_resized = resize(X_test, (224, 224)).numpy()
+
+# Normalize
+X_train_resized = preprocess_input(X_train_resized)
+X_test_resized = preprocess_input(X_test_resized)
+
+# Split training data
+X_train_split, X_val_split, y_train_split, y_val_split = train_test_split(
+    X_train_resized, y_train, test_size=0.2, random_state=42
+)
+
+print("=" * 60)
+print("TRANSFER LEARNING APPROACH")
+print("=" * 60)
+
+# Load pre-trained VGG16
+base_model = VGG16(
+    weights='imagenet',
+    include_top=False,
+    input_shape=(224, 224, 3)
+)
+
+# Freeze base model layers
+base_model.trainable = False
+
+# Add custom top layers
+x = GlobalAveragePooling2D()(base_model.output)
+x = Dense(256, activation='relu')(x)
+x = Dense(128, activation='relu')(x)
+predictions = Dense(10, activation='softmax')(x)
+
+model_transfer = Model(inputs=base_model.input, outputs=predictions)
+
+# Compile
+model_transfer.compile(
+    optimizer=Adam(learning_rate=0.001),
+    loss='categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+print(model_transfer.summary())
+
+# Train (transfer learning)
+print("\nTraining with transfer learning...")
+history_transfer = model_transfer.fit(
+    X_train_split, y_train_split,
+    epochs=20,
+    batch_size=32,
+    validation_data=(X_val_split, y_val_split),
+    verbose=1
+)
+
+# Evaluate
+test_loss_transfer, test_acc_transfer = model_transfer.evaluate(
+    X_test_resized, y_test, verbose=0
+)
+print(f"Transfer Learning Test Accuracy: {test_acc_transfer:.4f}")
+
+print("\n" + "=" * 60)
+print("TRAINING FROM SCRATCH (For Comparison)")
+print("=" * 60)
+
+# Build similar model from scratch (no pre-trained weights)
+model_scratch = Sequential([
+    Conv2D(32, (3, 3), activation='relu', input_shape=(224, 224, 3)),
+    MaxPooling2D((2, 2)),
+    Conv2D(64, (3, 3), activation='relu'),
+    MaxPooling2D((2, 2)),
+    Conv2D(128, (3, 3), activation='relu'),
+    MaxPooling2D((2, 2)),
+    Flatten(),
+    Dense(256, activation='relu'),
+    Dropout(0.5),
+    Dense(10, activation='softmax')
+])
+
+model_scratch.compile(
+    optimizer=Adam(learning_rate=0.001),
+    loss='categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+print(model_scratch.summary())
+
+print("\nTraining from scratch...")
+history_scratch = model_scratch.fit(
+    X_train_split, y_train_split,
+    epochs=20,
+    batch_size=32,
+    validation_data=(X_val_split, y_val_split),
+    verbose=1
+)
+
+test_loss_scratch, test_acc_scratch = model_scratch.evaluate(
+    X_test_resized, y_test, verbose=0
+)
+print(f"From Scratch Test Accuracy: {test_acc_scratch:.4f}")
+
+# Compare both approaches
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+axes[0].plot(history_transfer.history['val_accuracy'], label='Transfer Learning')
+axes[0].plot(history_scratch.hist
